@@ -9,7 +9,6 @@ const cubeColors = ["#FFFFFF", "#00E676", "#FF1744", "#FF9100", "#FFEA00", "#297
 
 function preload() {
     soundFormats('mp3', 'ogg');
-    // ユーザーのファイルを読み込み
     snapSound = loadSound('snap.mp3'); 
 }
 
@@ -28,26 +27,27 @@ function initGame() {
     targets = [];
     gameClear = false;
     
-    let startX, startY;
+    let targetStartX, targetStartY;
 
     if (isMobile) {
-        // スマホ用：縦長レイアウト（上にブロック、下に3x3枠）
+        // 【スマホ版レイアウト】
         size = min(width, height) * 0.22;
-        startX = width / 2 - (size * 1.1);
-        startY = height * 0.6 - (size * 1.1);
+        // 1. 枠を画面の真ん中に配置
+        targetStartX = width / 2 - (size * 1.1);
+        targetStartY = height / 2 - (size * 1.1);
     } else {
-        // PC用：横長レイアウト（左にブロック、右に3x3枠）
+        // 【PC版レイアウト】
         size = min(width, height) * 0.15;
-        startX = width * 0.65 - (size * 1.1);
-        startY = height / 2 - (size * 1.1);
+        targetStartX = width * 0.65 - (size * 1.1);
+        targetStartY = height / 2 - (size * 1.1);
     }
 
     // 枠（ターゲット）の生成
     for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
             targets.push({
-                x: startX + i * (size + 15),
-                y: startY + j * (size + 15),
+                x: targetStartX + i * (size + 15),
+                y: targetStartY + j * (size + 15),
                 occupied: false
             });
         }
@@ -57,9 +57,11 @@ function initGame() {
     for (let i = 0; i < 9; i++) {
         let bx, by;
         if (isMobile) {
+            // 【スマホ版：ブロックを画面の下の方に配置】
             bx = random(20, width - size - 20);
-            by = random(size, height * 0.3);
+            by = random(height * 0.75, height - size - 40); 
         } else {
+            // PC版：ブロックを画面の左側に配置
             bx = random(50, width * 0.3);
             by = random(size, height - size - 50);
         }
@@ -100,7 +102,7 @@ function draw() {
         } else {
             noStroke();
             if (b.isDragging) {
-                fill(255, 30); // 影
+                fill(255, 30);
                 rect(b.x + 8, b.y + 8, drawSize, drawSize, 15);
                 fill(cubeColors[b.colorIdx]);
             }
@@ -108,17 +110,20 @@ function draw() {
         rect(b.x - b.pulse/2, b.y - b.pulse/2, drawSize, drawSize, 15);
     }
 
-    // クリア演出
     if (gameClear) {
-        fill(0, 180);
-        rect(0, 0, width, height);
-        fill(255);
-        textAlign(CENTER, CENTER);
-        textSize(isMobile ? 40 : 60);
-        text("COMPLETE! ✨", width/2, height/2);
-        textSize(20);
-        text("Click to Restart", width/2, height/2 + 60);
+        drawClearUI();
     }
+}
+
+function drawClearUI() {
+    fill(0, 200);
+    rect(0, 0, width, height);
+    fill(255);
+    textAlign(CENTER, CENTER);
+    textSize(isMobile ? 40 : 60);
+    text("COMPLETE! ✨", width/2, height/2);
+    textSize(18);
+    text("タップでリトライ", width/2, height/2 + 60);
 }
 
 function mousePressed() {
@@ -133,9 +138,8 @@ function mousePressed() {
                 b.currentSnap = null;
             }
             
-            // 色替えと音
             b.colorIdx = (b.colorIdx + 1) % cubeColors.length;
-            if (snapSound.isLoaded()) {
+            if (snapSound && snapSound.isLoaded()) {
                 snapSound.currentTime = 0;
                 snapSound.play();
             }
@@ -153,7 +157,7 @@ function mouseDragged() {
         if (b.isDragging) {
             b.x = mouseX - b.w / 2;
             // スマホ時は指で見えるよう少し上にずらす
-            b.y = isMobile ? mouseY - b.h * 1.2 : mouseY - b.h / 2;
+            b.y = isMobile ? mouseY - b.h * 1.5 : mouseY - b.h / 2;
         }
     }
 }
