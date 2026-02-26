@@ -1,10 +1,9 @@
 :root {
     --bg-color: #0f141e;
     --grid-gap: 4px;
-    --cell-size: 11vw; /* スマホで確実にはみ出さないサイズに縮小 */
+    --cell-size: 11vw; 
 }
 
-/* PC用のサイズ */
 @media (min-width: 768px) {
     :root { --cell-size: 60px; }
 }
@@ -13,7 +12,7 @@ body {
     margin: 0; overflow: hidden;
     background-color: var(--bg-color);
     font-family: sans-serif;
-    touch-action: none; /* スマホの誤スクロールを完全防止 */
+    touch-action: none; 
     user-select: none;
 }
 
@@ -26,18 +25,15 @@ body {
     display: flex; align-items: center; justify-content: center;
 }
 
-/* スマホレイアウト：ターゲットは上半分 */
 #target-area { flex: 1; align-items: flex-end; padding-bottom: 5vh; }
-#block-area { flex: 1; } /* ここから position: relative; を削除しました（ワープバグの原因） */
+#block-area { flex: 1; }
 
-/* PCレイアウト */
 @media (min-width: 768px) and (orientation: landscape) {
     #game-container { flex-direction: row-reverse; }
     #target-area { flex: 1; align-items: center; justify-content: flex-start; padding-left: 5%; padding-bottom: 0; }
     #block-area { flex: 1; }
 }
 
-/* 5x5のターゲット枠 */
 .grid {
     display: grid;
     grid-template-columns: repeat(5, var(--cell-size));
@@ -52,32 +48,38 @@ body {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 6px;
     box-sizing: border-box;
-    transition: background 0.2s;
 }
 
-/* ピース（テトリスブロック全体） */
+/* ピース（全体） */
 .piece {
-    position: absolute; /* 画面全体を基準に動くように変更 */
+    position: absolute;
     display: grid; 
     gap: var(--grid-gap);
     cursor: grab;
-    transition: transform 0.1s;
-    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+    /* 通常時は位置と変形を滑らかに変化させる */
+    transition: left 0.1s, top 0.1s, transform 0.1s;
     z-index: 10;
+    /* 「変な影」の原因かもしれないので、影は一旦控えめにします */
+    /* filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)); */
 }
 
+/* ドラッグ中のスタイル（重要！） */
 .piece.dragging {
     cursor: grabbing;
-    transform: scale(1.1); 
-    filter: drop-shadow(0 15px 20px rgba(0,0,0,0.8));
+    /* ドラッグ中はアニメーションを「無効」にする → 指にダイレクトに追従 */
+    transition: none; 
+    
+    /* 掴んだ時の演出（少し大きくして浮かせ感だけ出す） */
+    transform: scale(1.05); 
     z-index: 100;
+    opacity: 0.9; /* 少しだけ透けさせて下の様子を見やすくする */
 }
 
-/* ピースの中の1マス */
 .piece-cell {
     width: var(--cell-size); height: var(--cell-size);
     border-radius: 6px;
-    border: 1px solid rgba(255,255,255,0.3);
+    /* 枠線も残像の原因になりうるので、少し細く薄くします */
+    border: 1px solid rgba(255,255,255,0.15);
 }
 
 .piece-cell.empty {
