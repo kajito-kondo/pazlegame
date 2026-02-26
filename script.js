@@ -19,7 +19,8 @@ function setup() {
 }
 
 function checkDevice() {
-    isMobile = windowWidth < 600;
+    // 画面の横幅が768px未満、または「縦長画面（高さ＞幅）」の場合はスマホ版と判定する
+    isMobile = (windowWidth < 768) || (windowHeight > windowWidth);
 }
 
 function initGame() {
@@ -30,16 +31,25 @@ function initGame() {
     let targetStartX, targetStartY;
 
     if (isMobile) {
-        // 【スマホ版レイアウト】
+        // ==========================================
+        // 【スマホ版：確実なレイアウト】
+        // ==========================================
         size = min(width, height) * 0.22;
-        // 1. 枠を画面の真ん中に配置
-        targetStartX = width / 2 - (size * 1.1);
-        targetStartY = height / 2 - (size * 1.1);
+        
+        // 枠（ターゲット）全体の幅と高さを計算
+        let gridOffset = (size * 1.5) + 15; 
+        
+        // 1. 枠を画面の「中央より上（高さ30%の位置）」に配置
+        targetStartX = width / 2 - gridOffset;
+        targetStartY = height * 0.3 - gridOffset; 
     } else {
-        // 【PC版レイアウト】
+        // ==========================================
+        // 【PC版：横長レイアウト】
+        // ==========================================
         size = min(width, height) * 0.15;
-        targetStartX = width * 0.65 - (size * 1.1);
-        targetStartY = height / 2 - (size * 1.1);
+        let gridOffset = (size * 1.5) + 15; 
+        targetStartX = width * 0.65 - gridOffset;
+        targetStartY = height / 2 - gridOffset;
     }
 
     // 枠（ターゲット）の生成
@@ -57,9 +67,10 @@ function initGame() {
     for (let i = 0; i < 9; i++) {
         let bx, by;
         if (isMobile) {
-            // 【スマホ版：ブロックを画面の下の方に配置】
+            // 2. スマホ版：ブロックを「画面の下35%のエリア」に確実に固める
+            let safeBottomStart = height * 0.65; // 下から35%の位置からスタート
             bx = random(20, width - size - 20);
-            by = random(height * 0.75, height - size - 40); 
+            by = random(safeBottomStart, height - size - 20); 
         } else {
             // PC版：ブロックを画面の左側に配置
             bx = random(50, width * 0.3);
@@ -85,7 +96,7 @@ function draw() {
     // 枠の描画
     for (let t of targets) {
         noFill();
-        stroke(255, 30);
+        stroke(255, 40);
         strokeWeight(2);
         rect(t.x, t.y, size, size, 15);
     }
@@ -98,10 +109,11 @@ function draw() {
         if (b.currentSnap) {
             stroke(255);
             strokeWeight(4);
-            b.pulse *= 0.8;
+            b.pulse *= 0.8; // はまった時のポヨヨン演出
         } else {
             noStroke();
             if (b.isDragging) {
+                // ドラッグ中の影
                 fill(255, 30);
                 rect(b.x + 8, b.y + 8, drawSize, drawSize, 15);
                 fill(cubeColors[b.colorIdx]);
@@ -145,7 +157,7 @@ function mousePressed() {
             }
 
             b.isDragging = true;
-            b.pulse = 20;
+            b.pulse = 20; // クリック時に少し大きくする
             blocks.push(blocks.splice(i, 1)[0]);
             break; 
         }
@@ -156,7 +168,7 @@ function mouseDragged() {
     for (let b of blocks) {
         if (b.isDragging) {
             b.x = mouseX - b.w / 2;
-            // スマホ時は指で見えるよう少し上にずらす
+            // スマホ時は、指に隠れないようにブロックを指の「上」に表示する
             b.y = isMobile ? mouseY - b.h * 1.5 : mouseY - b.h / 2;
         }
     }
