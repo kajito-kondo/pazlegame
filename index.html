@@ -1,16 +1,29 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ASMR Cube Puzzle</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.sound.min.js"></script>
-    <style> 
-        body { margin: 0; overflow: hidden; background: #0f141e; touch-action: none; } 
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div id="game-container">
+        <div id="target-area">
+            <div class="grid" id="targets">
+                </div>
+        </div>
+        
+        <div id="block-area">
+            <div class="grid" id="stocks">
+                </div>
+        </div>
+    </div>
+
+    <div id="clear-screen">
+        <h1>COMPLETE! ✨</h1>
+        <p>画面タップでリトライ</p>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>

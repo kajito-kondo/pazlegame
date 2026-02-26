@@ -1,0 +1,110 @@
+:root {
+    --bg-color: #0f141e;
+    --grid-gap: 15px;
+    --block-size: 80px;
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    font-family: sans-serif;
+    touch-action: none; /* スマホの誤スクロール防止 */
+}
+
+/* 画面全体のレイアウト */
+#game-container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    /* 【スマホ版】デフォルトは縦並び */
+    flex-direction: column; 
+}
+
+/* 枠エリアとブロックエリアを半分ずつ分ける */
+#target-area, #block-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* スマホ版の微調整（枠は上、ブロックは下） */
+#target-area { align-items: flex-end; padding-bottom: 20px; }
+#block-area { align-items: flex-start; padding-top: 20px; }
+
+/* =========================================
+   【PC版】横幅が768px以上、かつ横長画面の時
+   ========================================= */
+@media (min-width: 768px) and (orientation: landscape) {
+    #game-container {
+        /* 横並びに変更！ */
+        flex-direction: row-reverse; 
+    }
+    /* 枠を画面の左、ブロックを右に配置 */
+    #target-area { align-items: center; justify-content: flex-start; padding-left: 10%; padding-bottom: 0; }
+    #block-area { align-items: center; justify-content: flex-end; padding-right: 10%; padding-top: 0; }
+    
+    :root { --block-size: 100px; } /* PCは少し大きく */
+}
+
+/* 3x3のグリッド設定 */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--grid-gap);
+}
+
+/* ターゲット枠のデザイン */
+.target-cell {
+    width: var(--block-size);
+    height: var(--block-size);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    box-sizing: border-box;
+}
+
+/* ブロックの初期位置（透明にしておく） */
+.stock-cell {
+    width: var(--block-size);
+    height: var(--block-size);
+}
+
+/* ブロック本体のデザイン */
+.block {
+    position: absolute; /* 画面上を自由に動けるように絶対配置 */
+    width: var(--block-size);
+    height: var(--block-size);
+    border-radius: 15px;
+    cursor: grab;
+    box-sizing: border-box;
+    /* ピタッと吸い付くアニメーション */
+    transition: left 0.15s ease-out, top 0.15s ease-out, transform 0.1s;
+}
+
+/* ドラッグ中のデザイン */
+.block.dragging {
+    transition: none; /* ドラッグ中は指に遅れないようにアニメを消す */
+    transform: scale(1.15); /* つまんだら大きくなる */
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5); /* 影をつけて浮かせる */
+    cursor: grabbing;
+}
+
+/* はまった瞬間のデザイン */
+.block.snapped {
+    border: 4px solid white;
+}
+
+/* クリア画面 */
+#clear-screen {
+    display: none;
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+#clear-screen.show { display: flex; }
