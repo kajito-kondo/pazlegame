@@ -1,161 +1,213 @@
-const colors = ["#FFFFFF", "#00E676", "#FF1744", "#FF9100", "#FFEA00", "#2979FF"];
-let blocksData = []; // ブロックの情報を管理する配列
+const colors = ["#FFFFFF", "#00E676", "#FF1744", "#FF9100", "#FFEA00", "#2979FF", "#D500F9"];
 
-// p5.jsを使わず標準のAudioを使う（遅延ゼロで重ならないようにクローンを使う）
+// 絶対に5x5にピッタリはまるように計算された7つの形（1=ブロック、0=空白）
+const shapeDefs = [
+    [[1,1,1,1,1]],                // 5マス棒
+    [[1,1],[1,1]],                // 四角
+    [[1,1],[1,0]],                // 小さいL字
+    [[0,1],[1,1],[1,0]],          // Z字
+    [[1,1,1],[0,0,1]],            // 長いL字
+    [[0,1],[1,1]],                // ミニL字
+    [[1,1]]                       // 2マス棒
+];
+
+let pieces = [];
+let targetGrid = []; // 5x5のマス目管理配列
+
 const snapSound = new Audio('snap.mp3');
 function playSnap() {
-    // 連続タップでも音が重なって鳴るASMR仕様
     const clone = snapSound.cloneNode();
-    clone.play().catch(e => console.log("音の再生に失敗:", e));
+    clone.play().catch(e => console.log("Audio Error:", e));
 }
 
-// 起動時のセットアップ
 window.onload = () => {
-    const targetsContainer = document.getElementById('targets');
-    const stocksContainer = document.getElementById('stocks');
-
-    // HTMLに枠とブロックを9個ずつ自動生成
-    for (let i = 0; i < 9; i++) {
-        // 1. ターゲット枠の生成
-        const target = document.createElement('div');
-        target.className = 'target-cell';
-        targetsContainer.appendChild(target);
-
-        // 2. ストック枠（見えない初期位置）の生成
-        const stock = document.createElement('div');
-        stock.className = 'stock-cell';
-        stocksContainer.appendChild(stock);
-
-        // 3. 実際に動かすブロックの生成
-        const block = document.createElement('div');
-        block.className = 'block';
-        let colorIdx = Math.floor(Math.random() * colors.length);
-        block.dataset.colorIdx = colorIdx;
-        block.style.backgroundColor = colors[colorIdx];
-        document.body.appendChild(block);
-
-        blocksData.push({
-            el: block,
-            stockCell: stock,   // 最初の家
-            currentCell: stock  // 今いる場所
-        });
-
-        setupDrag(blocksData[i]);
-    }
-
-    updatePositions();
-    
-    // 最初のタップでオーディオを許可
+    initGame();
+    // 最初のタップでオーディオ許可
     document.body.addEventListener('pointerdown', () => {
         snapSound.play().then(() => { snapSound.pause(); snapSound.currentTime = 0; });
     }, { once: true });
 };
 
-// 画面サイズが変わったら、ブロックの位置をCSSに合わせて再計算する
-window.addEventListener('resize', updatePositions);
+function initGame() {
+    const targetsContainer = document.getElementById('targets');
+    const blockArea = document.getElementById('block-area');
+    targetsContainer.innerHTML = '';
+    blockArea.innerHTML = '';
+    pieces = [];
+    targetGrid = Array(5).fill().map(() => Array(5).fill(null));
 
-function updatePositions() {
-    blocksData.forEach(b => {
-        // 現在所属しているセル（CSSが配置した枠）の座標を取得して、ブロックをそこへ移動
-        const rect = b.currentCell.getBoundingClientRect();
-        b.el.style.left = rect.left + 'px';
-        b.el.style.top = rect.top + 'px';
+    // 1. 5x5のターゲットマスを生成
+    for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 5; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'target-cell';
+            targetsContainer.appendChild(cell);
+        }
+    }
+
+    // 2. ピースを生成
+    shapeDefs.forEach((matrix, index) => {
+        const el = document.createElement('div');
+        el.className = 'piece';
+        // 形に合わせて列数を設定
+        el.style.gridTemplateColumns = `repeat(${matrix[0].length}, var(--cell-size))`;
+
+        let colorIdx = index % colors.length;
+        el.dataset.colorIdx = colorIdx;
+
+        // ブロックの形を組み立てる
+        matrix.forEach(row => {
+            row.forEach(val => {
+                const cell = document.createElement('div');
+                cell.className = val === 1 ? 'piece-cell solid' : 'piece-cell empty';
+                if (val === 1) cell.style.backgroundColor = colors[colorIdx];
+                el.appendChild(cell);
+            });
+        });
+
+        blockArea.appendChild(el);
+
+        const pieceObj = { el, matrix, colorIdx, row: -1, col: -1 };
+        pieces.push(pieceObj);
+        setupDrag(pieceObj);
+    });
+
+    scatterPieces(); // 初期配置をバラバラにする
+}
+
+function scatterPieces() {
+    const blockArea = document.getElementById('block-area');
+    const rect = blockArea.getBoundingClientRect();
+    
+    pieces.forEach(p => {
+        p.el.style.left = (Math.random() * (rect.width - 150)) + 20 + 'px';
+        p.el.style.top = (Math.random() * (rect.height - 150)) + 20 + 'px';
     });
 }
 
-function setupDrag(b) {
+function setupDrag(p) {
     let offsetX, offsetY;
 
-    // タッチ・クリックした時
-    b.el.addEventListener('pointerdown', (e) => {
+    p.el.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         
-        // 音と色変え
+        // 色変更ギミック
+        p.colorIdx = (p.colorIdx + 1) % colors.length;
+        p.el.querySelectorAll('.solid').forEach(c => c.style.backgroundColor = colors[p.colorIdx]);
         playSnap();
-        b.el.dataset.colorIdx = (parseInt(b.el.dataset.colorIdx) + 1) % colors.length;
-        b.el.style.backgroundColor = colors[b.el.dataset.colorIdx];
 
-        // 掴んだブロックを一番手前に
-        blocksData.forEach(blk => blk.el.style.zIndex = 10);
-        b.el.style.zIndex = 100;
-
-        b.el.classList.add('dragging');
-        b.el.classList.remove('snapped');
-
-        // 指のズレを計算
-        const rect = b.el.getBoundingClientRect();
-        offsetX = e.clientX - rect.left;
-        offsetY = e.clientY - rect.top;
-
-        // ドラッグ中は、スマホで指に隠れないように少し上にずらす
-        if (window.innerWidth < 768) offsetY += 40; 
-    });
-
-    // 動かしている時
-    window.addEventListener('pointermove', (e) => {
-        if (!b.el.classList.contains('dragging')) return;
-        b.el.style.left = (e.clientX - offsetX) + 'px';
-        b.el.style.top = (e.clientY - offsetY) + 'px';
-    });
-
-    // 離した時
-    window.addEventListener('pointerup', (e) => {
-        if (!b.el.classList.contains('dragging')) return;
-        b.el.classList.remove('dragging');
-
-        const blockRect = b.el.getBoundingClientRect();
-        const centerX = blockRect.left + blockRect.width / 2;
-        const centerY = blockRect.top + blockRect.height / 2;
-
-        let closestTarget = null;
-        let minDist = 60; // 吸い付く距離
-
-        // 全部のターゲット枠をチェック
-        document.querySelectorAll('.target-cell').forEach(target => {
-            const tRect = target.getBoundingClientRect();
-            const tCenterX = tRect.left + tRect.width / 2;
-            const tCenterY = tRect.top + tRect.height / 2;
-            
-            const dist = Math.hypot(centerX - tCenterX, centerY - tCenterY);
-            
-            // 他のブロックがすでにいないかチェック
-            const occupied = blocksData.some(other => other !== b && other.currentCell === target);
-
-            if (dist < minDist && !occupied) {
-                minDist = dist;
-                closestTarget = target;
-            }
-        });
-
-        // 枠に入ったか、元の場所に戻るか
-        if (closestTarget) {
-            b.currentCell = closestTarget;
-            b.el.classList.add('snapped');
-            playSnap();
-            checkClear();
-        } else {
-            // はまらなかったら元のストック位置へ戻す
-            b.currentCell = b.stockCell;
+        // 盤面から剥がす（グリッドの登録を解除）
+        if (p.row !== -1) {
+            p.matrix.forEach((row, r) => {
+                row.forEach((val, c) => {
+                    if (val === 1) targetGrid[p.row + r][p.col + c] = null;
+                });
+            });
+            p.row = -1; p.col = -1;
         }
 
-        // CSSの位置にピタッと吸い付かせる（アニメーションはCSSがやってくれる）
-        updatePositions(); 
+        pieces.forEach(blk => blk.el.style.zIndex = 10);
+        p.el.style.zIndex = 100;
+        p.el.classList.add('dragging');
+
+        const rect = p.el.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        if (window.innerWidth < 768) offsetY += 60; // スマホでの指隠れ防止
+    });
+
+    window.addEventListener('pointermove', (e) => {
+        if (!p.el.classList.contains('dragging')) return;
+        p.el.style.left = (e.clientX - offsetX) + 'px';
+        p.el.style.top = (e.clientY - offsetY) + 'px';
+    });
+
+    window.addEventListener('pointerup', (e) => {
+        if (!p.el.classList.contains('dragging')) return;
+        p.el.classList.remove('dragging');
+
+        const targetsRect = document.getElementById('targets').getBoundingClientRect();
+        const pieceRect = p.el.getBoundingClientRect();
+        
+        // グリッドの1マスのサイズ＋隙間
+        const cellSize = targetsRect.width / 5;
+
+        // ピースの左上が、ターゲットのどのマスに近いか計算
+        const relativeX = pieceRect.left - targetsRect.left;
+        const relativeY = pieceRect.top - targetsRect.top;
+        const targetCol = Math.round(relativeX / cellSize);
+        const targetRow = Math.round(relativeY / cellSize);
+
+        // はまるかどうかの判定
+        let canSnap = true;
+        
+        // 1. 枠からはみ出さないかチェック
+        if (targetCol < 0 || targetRow < 0 || 
+            targetCol + p.matrix[0].length > 5 || 
+            targetRow + p.matrix.length > 5) {
+            canSnap = false;
+        }
+
+        // 2. 他のブロックと重ならないかチェック
+        if (canSnap) {
+            for (let r = 0; r < p.matrix.length; r++) {
+                for (let c = 0; c < p.matrix[r].length; c++) {
+                    if (p.matrix[r][c] === 1) {
+                        if (targetGrid[targetRow + r][targetCol + c] !== null) {
+                            canSnap = false; // すでに誰かいる
+                        }
+                    }
+                }
+            }
+        }
+
+        if (canSnap) {
+            // スナップ成功！
+            p.row = targetRow;
+            p.col = targetCol;
+            
+            // 盤面に登録
+            p.matrix.forEach((row, r) => {
+                row.forEach((val, c) => {
+                    if (val === 1) targetGrid[targetRow + r][targetCol + c] = p;
+                });
+            });
+
+            // 位置をピッタリ合わせる
+            p.el.style.left = (targetsRect.left + targetCol * cellSize) + 'px';
+            p.el.style.top = (targetsRect.top + targetRow * cellSize) + 'px';
+            
+            playSnap();
+            checkClear();
+        }
     });
 }
 
 function checkClear() {
-    const isClear = blocksData.every(b => b.currentCell.classList.contains('target-cell'));
+    // 25マスすべてが埋まっているか確認
+    const isClear = targetGrid.every(row => row.every(cell => cell !== null));
     if (isClear) {
-        document.getElementById('clear-screen').classList.add('show');
+        setTimeout(() => {
+            document.getElementById('clear-screen').classList.add('show');
+        }, 300);
     }
 }
 
-// クリア画面を押したらリセット
+// クリア画面タップでリセット
 document.getElementById('clear-screen').addEventListener('pointerdown', () => {
     document.getElementById('clear-screen').classList.remove('show');
-    blocksData.forEach(b => {
-        b.currentCell = b.stockCell; // 全員を初期位置に返す
-        b.el.classList.remove('snapped');
+    initGame();
+});
+
+// 画面リサイズ対応
+window.addEventListener('resize', () => {
+    // スナップ済みのピースの位置を再計算
+    const targetsRect = document.getElementById('targets').getBoundingClientRect();
+    const cellSize = targetsRect.width / 5;
+    pieces.forEach(p => {
+        if (p.row !== -1) {
+            p.el.style.left = (targetsRect.left + p.col * cellSize) + 'px';
+            p.el.style.top = (targetsRect.top + p.row * cellSize) + 'px';
+        }
     });
-    updatePositions();
 });
