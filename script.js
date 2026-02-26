@@ -29,13 +29,10 @@ window.onload = () => {
 function initGame() {
     const targetsContainer = document.getElementById('targets');
     targetsContainer.innerHTML = '';
-    
-    // 既存のピースをすべて削除（リトライ用）
     document.querySelectorAll('.piece').forEach(p => p.remove());
     pieces = [];
     targetGrid = Array(5).fill().map(() => Array(5).fill(null));
 
-    // 1. 5x5のターゲットマスを生成
     for (let r = 0; r < 5; r++) {
         for (let c = 0; c < 5; c++) {
             const cell = document.createElement('div');
@@ -44,7 +41,6 @@ function initGame() {
         }
     }
 
-    // 2. ピースを生成してBodyに追加（座標ズレを防ぐため）
     shapeDefs.forEach((matrix, index) => {
         const el = document.createElement('div');
         el.className = 'piece';
@@ -62,48 +58,41 @@ function initGame() {
             });
         });
 
-        // blockAreaではなくbodyに直接追加する
         document.body.appendChild(el);
-
         const pieceObj = { el, matrix, colorIdx, row: -1, col: -1 };
         pieces.push(pieceObj);
         setupDrag(pieceObj);
     });
 
-    // 描画が終わってから配置を計算
     setTimeout(scatterPieces, 50); 
 }
 
 function scatterPieces() {
     const isMobile = window.innerWidth < 768;
-    
     pieces.forEach(p => {
-        // 配置済みのものは動かさない
         if (p.row !== -1) return;
-
         let startX, startY;
-        
         if (isMobile) {
-            // スマホ：画面の下半分（55%以降）に配置
             startX = Math.random() * (window.innerWidth - 120) + 10;
             startY = (window.innerHeight * 0.55) + Math.random() * (window.innerHeight * 0.35);
         } else {
-            // PC：画面の右側に配置
             startX = (window.innerWidth * 0.55) + Math.random() * (window.innerWidth * 0.35);
             startY = Math.random() * (window.innerHeight - 150) + 20;
         }
-
         p.el.style.left = startX + 'px';
         p.el.style.top = startY + 'px';
     });
 }
 
 function setupDrag(p) {
-    let offsetX, offsetY;
+    // タップした位置とブロックの左上とのズレを記憶する変数
+    let dragOffsetX, dragOffsetY;
 
     p.el.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         
+        // ここでの位置変更は行わない！（ワープの原因）
+
         p.colorIdx = (p.colorIdx + 1) % colors.length;
         p.el.querySelectorAll('.solid').forEach(c => c.style.backgroundColor = colors[p.colorIdx]);
         playSnap();
@@ -121,18 +110,28 @@ function setupDrag(p) {
         p.el.style.zIndex = 100;
         p.el.classList.add('dragging');
 
+        // 【重要】タップした点と、ブロックの現在の左上位置との差分を計算
         const rect = p.el.getBoundingClientRect();
-        offsetX = e.clientX - rect.left;
-        offsetY = e.clientY - rect.top;
-        
-        // スマホで指に隠れないように上にずらす
-        if (window.innerWidth < 768) offsetY += 60; 
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        // ここではまだスマホ用の補正は加えない！
     });
 
     window.addEventListener('pointermove', (e) => {
         if (!p.el.classList.contains('dragging')) return;
-        p.el.style.left = (e.clientX - offsetX) + 'px';
-        p.el.style.top = (e.clientY - offsetY) + 'px';
+
+        // 現在のマウス位置から、記憶しておいた差分を引くことで、
+        // ブロックの左上があるべき位置を計算する
+        let newLeft = e.clientX - dragOffsetX;
+        let newTop = e.clientY - dragOffsetY;
+
+        // 【重要】スマホで指に隠れない補正は、移動中のみ適用する
+        if (window.innerWidth < 768) {
+            newTop -= 60; 
+        }
+
+        p.el.style.left = newLeft + 'px';
+        p.el.style.top = newTop + 'px';
     });
 
     window.addEventListener('pointerup', (e) => {
@@ -143,25 +142,38 @@ function setupDrag(p) {
         const pieceRect = p.el.getBoundingClientRect();
         
         const cellSize = targetsRect.width / 5;
-        const relativeX = pieceRect.left - targetsRect.left;
-        const relativeY = pieceRect.top - targetsRect.top;
+        // 判定基準をピースの「中心」にする
+        const pieceCenterX = pieceRect.left + pieceRect.width / 2;
+        const pieceCenterY = pieceRect.top + pieceRect.height / 2;
+
+        const relativeX = pieceCenterX - targetsRect.left;
+        const relativeY = pieceCenterY - targetsRect.top;
         
-        const targetCol = Math.round(relativeX / cellSize);
-        const targetRow = Math.round(relativeY / cellSize);
+        // 中心がどのマスに近いかで判定
+        let targetCol = Math.floor(relativeX / cellSize);
+        let targetRow = Math.floor(relativeY / cellSize);
+
+        // ピースの形状に合わせて左上の基準マスを調整
+        // (例: 2x2のピースなら、中心から左上に1マス分ずらした所を基準にする)
+        targetCol -= Math.floor((p.matrix[0].length - 1) / 2);
+        targetRow -= Math.floor((p.matrix.length - 1) / 2);
 
         let canSnap = true;
         
+        // 1. 枠内チェック
         if (targetCol < 0 || targetRow < 0 || 
             targetCol + p.matrix[0].length > 5 || 
             targetRow + p.matrix.length > 5) {
             canSnap = false;
         }
 
+        // 2. 重なりチェック
         if (canSnap) {
             for (let r = 0; r < p.matrix.length; r++) {
                 for (let c = 0; c < p.matrix[r].length; c++) {
                     if (p.matrix[r][c] === 1) {
-                        if (targetGrid[targetRow + r][targetCol + c] !== null) {
+                        // ターゲット座標が配列の範囲外じゃないか確認
+                        if (targetGrid[targetRow + r] && targetGrid[targetRow + r][targetCol + c] !== null) {
                             canSnap = false; 
                         }
                     }
@@ -170,20 +182,22 @@ function setupDrag(p) {
         }
 
         if (canSnap) {
+            // スナップ成功
             p.row = targetRow;
             p.col = targetCol;
-            
             p.matrix.forEach((row, r) => {
                 row.forEach((val, c) => {
                     if (val === 1) targetGrid[targetRow + r][targetCol + c] = p;
                 });
             });
-
+            // CSSのtransitionが効いて、ピタッと吸い付くアニメーションになる
             p.el.style.left = (targetsRect.left + targetCol * cellSize) + 'px';
             p.el.style.top = (targetsRect.top + targetRow * cellSize) + 'px';
-            
             playSnap();
             checkClear();
+        } else {
+            // スナップ失敗時の処理（今はそのままの位置に残る）
+            // 必要なら初期位置に戻す処理などをここに追加
         }
     });
 }
@@ -212,6 +226,5 @@ window.addEventListener('resize', () => {
             p.el.style.top = (targetsRect.top + p.row * cellSize) + 'px';
         }
     });
-    // はまっていないピースを再配置
     scatterPieces();
 });
