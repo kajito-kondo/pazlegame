@@ -1,10 +1,10 @@
 :root {
     --bg-color: #0f141e;
-    --grid-gap: 4px; /* テトリス感を出すために隙間を狭く */
-    --cell-size: 13vw; /* スマホ用の基準サイズ */
+    --grid-gap: 4px;
+    --cell-size: 11vw; /* スマホで確実にはみ出さないサイズに縮小 */
 }
 
-/* PC用のサイズ調整 */
+/* PC用のサイズ */
 @media (min-width: 768px) {
     :root { --cell-size: 60px; }
 }
@@ -13,7 +13,7 @@ body {
     margin: 0; overflow: hidden;
     background-color: var(--bg-color);
     font-family: sans-serif;
-    touch-action: none; 
+    touch-action: none; /* スマホの誤スクロールを完全防止 */
     user-select: none;
 }
 
@@ -26,15 +26,15 @@ body {
     display: flex; align-items: center; justify-content: center;
 }
 
-/* スマホレイアウト */
-#target-area { flex: 4; align-items: flex-end; padding-bottom: 20px; }
-#block-area { flex: 5; position: relative; }
+/* スマホレイアウト：ターゲットは上半分 */
+#target-area { flex: 1; align-items: flex-end; padding-bottom: 5vh; }
+#block-area { flex: 1; } /* ここから position: relative; を削除しました（ワープバグの原因） */
 
 /* PCレイアウト */
 @media (min-width: 768px) and (orientation: landscape) {
     #game-container { flex-direction: row-reverse; }
-    #target-area { flex: 1; align-items: center; justify-content: flex-start; padding-left: 5%; }
-    #block-area { flex: 1; align-items: center; justify-content: center; }
+    #target-area { flex: 1; align-items: center; justify-content: flex-start; padding-left: 5%; padding-bottom: 0; }
+    #block-area { flex: 1; }
 }
 
 /* 5x5のターゲット枠 */
@@ -57,17 +57,18 @@ body {
 
 /* ピース（テトリスブロック全体） */
 .piece {
-    position: absolute;
-    display: grid; /* ブロック内部もグリッドにする */
+    position: absolute; /* 画面全体を基準に動くように変更 */
+    display: grid; 
     gap: var(--grid-gap);
     cursor: grab;
     transition: transform 0.1s;
     filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+    z-index: 10;
 }
 
 .piece.dragging {
     cursor: grabbing;
-    transform: scale(1.1); /* つまむと少し大きくなる */
+    transform: scale(1.1); 
     filter: drop-shadow(0 15px 20px rgba(0,0,0,0.8));
     z-index: 100;
 }
@@ -79,7 +80,6 @@ body {
     border: 1px solid rgba(255,255,255,0.3);
 }
 
-/* 空白マス（L字などのヘコミ部分） */
 .piece-cell.empty {
     visibility: hidden;
 }
