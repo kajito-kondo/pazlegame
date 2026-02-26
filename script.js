@@ -1,203 +1,161 @@
-let blocks = []; 
-let targets = []; 
-let size;    
-let snapSound;
-let gameClear = false;
-let isMobile = false;
+const colors = ["#FFFFFF", "#00E676", "#FF1744", "#FF9100", "#FFEA00", "#2979FF"];
+let blocksData = []; // ブロックの情報を管理する配列
 
-const cubeColors = ["#FFFFFF", "#00E676", "#FF1744", "#FF9100", "#FFEA00", "#2979FF"];
-
-function preload() {
-    soundFormats('mp3', 'ogg');
-    snapSound = loadSound('snap.mp3'); 
+// p5.jsを使わず標準のAudioを使う（遅延ゼロで重ならないようにクローンを使う）
+const snapSound = new Audio('snap.mp3');
+function playSnap() {
+    // 連続タップでも音が重なって鳴るASMR仕様
+    const clone = snapSound.cloneNode();
+    clone.play().catch(e => console.log("音の再生に失敗:", e));
 }
 
-function setup() {
-    createCanvas(windowWidth, windowHeight);
-    checkDevice();
-    initGame();
-}
+// 起動時のセットアップ
+window.onload = () => {
+    const targetsContainer = document.getElementById('targets');
+    const stocksContainer = document.getElementById('stocks');
 
-function checkDevice() {
-    isMobile = windowWidth < 600;
-}
-
-function initGame() {
-    blocks = [];
-    targets = [];
-    gameClear = false;
-    
-    let targetStartX, targetStartY;
-
-    if (isMobile) {
-        // 【スマホ版レイアウト】
-        size = min(width, height) * 0.22;
-        // 1. 枠を画面の真ん中に配置
-        targetStartX = width / 2 - (size * 1.1);
-        targetStartY = height / 2 - (size * 1.1);
-    } else {
-        // 【PC版レイアウト】
-        size = min(width, height) * 0.15;
-        targetStartX = width * 0.65 - (size * 1.1);
-        targetStartY = height / 2 - (size * 1.1);
-    }
-
-    // 枠（ターゲット）の生成
-    for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 3; j++) {
-            targets.push({
-                x: targetStartX + i * (size + 15),
-                y: targetStartY + j * (size + 15),
-                occupied: false
-            });
-        }
-    }
-
-    // ブロックの生成
+    // HTMLに枠とブロックを9個ずつ自動生成
     for (let i = 0; i < 9; i++) {
-        let bx, by;
-        if (isMobile) {
-            // 【スマホ版：ブロックを画面の下の方に配置】
-            bx = random(20, width - size - 20);
-            by = random(height * 0.75, height - size - 40); 
-        } else {
-            // PC版：ブロックを画面の左側に配置
-            bx = random(50, width * 0.3);
-            by = random(size, height - size - 50);
-        }
+        // 1. ターゲット枠の生成
+        const target = document.createElement('div');
+        target.className = 'target-cell';
+        targetsContainer.appendChild(target);
 
-        blocks.push({
-            x: bx,
-            y: by,
-            w: size,
-            h: size,
-            isDragging: false,
-            currentSnap: null,
-            colorIdx: floor(random(cubeColors.length)),
-            pulse: 0
+        // 2. ストック枠（見えない初期位置）の生成
+        const stock = document.createElement('div');
+        stock.className = 'stock-cell';
+        stocksContainer.appendChild(stock);
+
+        // 3. 実際に動かすブロックの生成
+        const block = document.createElement('div');
+        block.className = 'block';
+        let colorIdx = Math.floor(Math.random() * colors.length);
+        block.dataset.colorIdx = colorIdx;
+        block.style.backgroundColor = colors[colorIdx];
+        document.body.appendChild(block);
+
+        blocksData.push({
+            el: block,
+            stockCell: stock,   // 最初の家
+            currentCell: stock  // 今いる場所
         });
+
+        setupDrag(blocksData[i]);
     }
+
+    updatePositions();
+    
+    // 最初のタップでオーディオを許可
+    document.body.addEventListener('pointerdown', () => {
+        snapSound.play().then(() => { snapSound.pause(); snapSound.currentTime = 0; });
+    }, { once: true });
+};
+
+// 画面サイズが変わったら、ブロックの位置をCSSに合わせて再計算する
+window.addEventListener('resize', updatePositions);
+
+function updatePositions() {
+    blocksData.forEach(b => {
+        // 現在所属しているセル（CSSが配置した枠）の座標を取得して、ブロックをそこへ移動
+        const rect = b.currentCell.getBoundingClientRect();
+        b.el.style.left = rect.left + 'px';
+        b.el.style.top = rect.top + 'px';
+    });
 }
 
-function draw() {
-    background(15, 20, 30);
+function setupDrag(b) {
+    let offsetX, offsetY;
 
-    // 枠の描画
-    for (let t of targets) {
-        noFill();
-        stroke(255, 30);
-        strokeWeight(2);
-        rect(t.x, t.y, size, size, 15);
-    }
-
-    // ブロックの描画
-    for (let b of blocks) {
-        let drawSize = b.w + b.pulse;
-        fill(cubeColors[b.colorIdx]);
+    // タッチ・クリックした時
+    b.el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
         
-        if (b.currentSnap) {
-            stroke(255);
-            strokeWeight(4);
-            b.pulse *= 0.8;
-        } else {
-            noStroke();
-            if (b.isDragging) {
-                fill(255, 30);
-                rect(b.x + 8, b.y + 8, drawSize, drawSize, 15);
-                fill(cubeColors[b.colorIdx]);
-            }
-        }
-        rect(b.x - b.pulse/2, b.y - b.pulse/2, drawSize, drawSize, 15);
-    }
+        // 音と色変え
+        playSnap();
+        b.el.dataset.colorIdx = (parseInt(b.el.dataset.colorIdx) + 1) % colors.length;
+        b.el.style.backgroundColor = colors[b.el.dataset.colorIdx];
 
-    if (gameClear) {
-        drawClearUI();
-    }
-}
+        // 掴んだブロックを一番手前に
+        blocksData.forEach(blk => blk.el.style.zIndex = 10);
+        b.el.style.zIndex = 100;
 
-function drawClearUI() {
-    fill(0, 200);
-    rect(0, 0, width, height);
-    fill(255);
-    textAlign(CENTER, CENTER);
-    textSize(isMobile ? 40 : 60);
-    text("COMPLETE! ✨", width/2, height/2);
-    textSize(18);
-    text("タップでリトライ", width/2, height/2 + 60);
-}
+        b.el.classList.add('dragging');
+        b.el.classList.remove('snapped');
 
-function mousePressed() {
-    if (getAudioContext().state !== 'running') userStartAudio();
-    if (gameClear) { initGame(); return; }
+        // 指のズレを計算
+        const rect = b.el.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
 
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        let b = blocks[i];
-        if (mouseX > b.x && mouseX < b.x + b.w && mouseY > b.y && mouseY < b.y + b.h) {
-            if (b.currentSnap) {
-                b.currentSnap.occupied = false;
-                b.currentSnap = null;
-            }
+        // ドラッグ中は、スマホで指に隠れないように少し上にずらす
+        if (window.innerWidth < 768) offsetY += 40; 
+    });
+
+    // 動かしている時
+    window.addEventListener('pointermove', (e) => {
+        if (!b.el.classList.contains('dragging')) return;
+        b.el.style.left = (e.clientX - offsetX) + 'px';
+        b.el.style.top = (e.clientY - offsetY) + 'px';
+    });
+
+    // 離した時
+    window.addEventListener('pointerup', (e) => {
+        if (!b.el.classList.contains('dragging')) return;
+        b.el.classList.remove('dragging');
+
+        const blockRect = b.el.getBoundingClientRect();
+        const centerX = blockRect.left + blockRect.width / 2;
+        const centerY = blockRect.top + blockRect.height / 2;
+
+        let closestTarget = null;
+        let minDist = 60; // 吸い付く距離
+
+        // 全部のターゲット枠をチェック
+        document.querySelectorAll('.target-cell').forEach(target => {
+            const tRect = target.getBoundingClientRect();
+            const tCenterX = tRect.left + tRect.width / 2;
+            const tCenterY = tRect.top + tRect.height / 2;
             
-            b.colorIdx = (b.colorIdx + 1) % cubeColors.length;
-            if (snapSound && snapSound.isLoaded()) {
-                snapSound.currentTime = 0;
-                snapSound.play();
+            const dist = Math.hypot(centerX - tCenterX, centerY - tCenterY);
+            
+            // 他のブロックがすでにいないかチェック
+            const occupied = blocksData.some(other => other !== b && other.currentCell === target);
+
+            if (dist < minDist && !occupied) {
+                minDist = dist;
+                closestTarget = target;
             }
+        });
 
-            b.isDragging = true;
-            b.pulse = 20;
-            blocks.push(blocks.splice(i, 1)[0]);
-            break; 
+        // 枠に入ったか、元の場所に戻るか
+        if (closestTarget) {
+            b.currentCell = closestTarget;
+            b.el.classList.add('snapped');
+            playSnap();
+            checkClear();
+        } else {
+            // はまらなかったら元のストック位置へ戻す
+            b.currentCell = b.stockCell;
         }
-    }
-}
 
-function mouseDragged() {
-    for (let b of blocks) {
-        if (b.isDragging) {
-            b.x = mouseX - b.w / 2;
-            // スマホ時は指で見えるよう少し上にずらす
-            b.y = isMobile ? mouseY - b.h * 1.5 : mouseY - b.h / 2;
-        }
-    }
-}
-
-function mouseReleased() {
-    for (let b of blocks) {
-        if (b.isDragging) {
-            b.isDragging = false;
-            let closest = null;
-            let minDist = size * 0.7;
-
-            for (let t of targets) {
-                if (!t.occupied) {
-                    let d = dist(b.x + b.w/2, b.y + b.h/2, t.x + size/2, t.y + size/2);
-                    if (d < minDist) {
-                        minDist = d;
-                        closest = t;
-                    }
-                }
-            }
-
-            if (closest) {
-                b.x = closest.x;
-                b.y = closest.y;
-                b.currentSnap = closest;
-                closest.occupied = true;
-                b.pulse = 15;
-                if (snapSound.isLoaded()) snapSound.play();
-                checkClear();
-            }
-        }
-    }
+        // CSSの位置にピタッと吸い付かせる（アニメーションはCSSがやってくれる）
+        updatePositions(); 
+    });
 }
 
 function checkClear() {
-    gameClear = blocks.every(b => b.currentSnap !== null);
+    const isClear = blocksData.every(b => b.currentCell.classList.contains('target-cell'));
+    if (isClear) {
+        document.getElementById('clear-screen').classList.add('show');
+    }
 }
 
-function windowResized() {
-    resizeCanvas(windowWidth, windowHeight);
-    checkDevice();
-    initGame();
-}
+// クリア画面を押したらリセット
+document.getElementById('clear-screen').addEventListener('pointerdown', () => {
+    document.getElementById('clear-screen').classList.remove('show');
+    blocksData.forEach(b => {
+        b.currentCell = b.stockCell; // 全員を初期位置に返す
+        b.el.classList.remove('snapped');
+    });
+    updatePositions();
+});
